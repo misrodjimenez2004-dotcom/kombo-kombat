@@ -1505,18 +1505,11 @@ createRoomBtn.addEventListener("click", async () => {
   joinRoomPanel.classList.add("hidden");
 });
 
-joinRoomContinueBtn.addEventListener("click", async () => {
-  const code = roomCodeInput.value.trim().toUpperCase();
-  if (!code) {
-    alert("Enter a room code first.");
-    return;
-  }
-
-  const ok = await connectToRoom(code, "guest");
-  if (!ok) return;
-
-  currentRoomCode = code;
-  goToFighterSelect();
+joinRoomBtn.addEventListener("click", () => {
+  roomChoiceWrap.classList.add("hidden");
+  joinRoomPanel.classList.remove("hidden");
+  createRoomPanel.classList.add("hidden");
+  roomCodeInput.focus();
 });
 
 hostContinueBtn.addEventListener("click", () => {
@@ -1759,30 +1752,44 @@ async function connectToRoom(roomCode, side) {
       }
     })
     .on("broadcast", { event: "fighter_select" }, ({ payload }) => {
-  if (payload.side !== multiplayerSide) {
-    remoteSelectedFighterId = payload.fighterId;
-    renderRemoteSelectedPreview();
-  }
-})
+      if (payload.side !== multiplayerSide) {
+        remoteSelectedFighterId = payload.fighterId;
+        renderRemoteSelectedPreview();
+      }
+    })
+    .on("broadcast", { event: "player_ready" }, ({ payload }) => {
+      if (payload.side !== multiplayerSide) {
+        remoteReady = true;
 
-.on("broadcast", { event: "player_ready" }, ({ payload }) => {
-  if (payload.side !== multiplayerSide) {
-    remoteReady = true;
-
-    if (localReady && remoteReady && !multiplayerMatchStarting) {
-  startMultiplayerMatch();
-}
-  }
-})
-
+        if (localReady && remoteReady && !multiplayerMatchStarting) {
+          startMultiplayerMatch();
+        }
+      }
+    })
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
       console.log("Presence sync:", state);
     });
 
-  const status = await roomChannel.subscribe();
+  const subscribed = await new Promise((resolve) => {
+    roomChannel.subscribe((status) => {
+      console.log("Room subscribe status:", status);
 
-  if (status !== "SUBSCRIBED") {
+      if (status === "SUBSCRIBED") {
+        resolve(true);
+      }
+
+      if (
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT" ||
+        status === "CLOSED"
+      ) {
+        resolve(false);
+      }
+    });
+  });
+
+  if (!subscribed) {
     alert("Failed to join room.");
     return false;
   }
