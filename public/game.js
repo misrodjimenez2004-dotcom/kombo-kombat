@@ -1,6 +1,6 @@
 const SUPABASE_URL = "https://ogkdhbenmzrlnrvphfbp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9na2RoYmVubXpybG5ydnBoZmJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTA1MTksImV4cCI6MjA5MDUyNjUxOX0.FyXAe_TzJXch8u9jECdI6-Aj1rFx27yYHWWIt6dkUrs";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const RARITY_STATS = {
   common:    { hp: 100, light: 8,  easy: 14, medium: 16, hard: 18 },
