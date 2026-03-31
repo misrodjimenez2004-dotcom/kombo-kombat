@@ -439,12 +439,12 @@ async function saveData() {
   localStorage.setItem(SAVE_KEYS.koins, String(komboKoins));
   localStorage.setItem(SAVE_KEYS.owned, JSON.stringify(ownedFighterIds));
 
-  const { data: authData } = await supabase.auth.getUser();
+  const { data: authData } = await supabaseClient.auth.getUser();
   const user = authData?.user;
 
   if (!user) return;
 
-  await supabase
+  await supabaseClient
     .from("players")
     .update({
       kombo_koins: komboKoins,
@@ -1292,7 +1292,7 @@ signupBtn.addEventListener("click", async () => {
 
   const email = usernameToEmail(username);
 
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error } = await supabaseClient.auth.signUp({
     email,
     password
   });
@@ -1308,7 +1308,7 @@ signupBtn.addEventListener("click", async () => {
     return;
   }
 
-  const { error: insertError } = await supabase
+  const { error: insertError } = await supabaseClient
     .from("players")
     .insert({
       id: user.id,
@@ -1345,7 +1345,7 @@ loginBtn.addEventListener("click", async () => {
 
   const email = usernameToEmail(username);
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
     email,
     password
   });
@@ -1361,7 +1361,7 @@ loginBtn.addEventListener("click", async () => {
     return;
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await supabaseClient
     .from("players")
     .select("*")
     .eq("id", user.id)
@@ -1471,7 +1471,7 @@ controlButtons.forEach((btn) => {
 
 async function goFromSplash() {
   try {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await supabaseClient.auth.getUser();
 
     if (error) {
       console.log("getUser error:", error);
@@ -1480,7 +1480,7 @@ async function goFromSplash() {
     }
 
     if (data?.user) {
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile, error: profileError } = await supabaseClient
         .from("players")
         .select("*")
         .eq("id", data.user.id)
