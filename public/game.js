@@ -1,3 +1,7 @@
+const SUPABASE_URL = "https://ogkdhbenmzrlnrvphfbp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9na2RoYmVubXpybG5ydnBoZmJwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTA1MTksImV4cCI6MjA5MDUyNjUxOX0.FyXAe_TzJXch8u9jECdI6-Aj1rFx27yYHWWIt6dkUrs";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 const RARITY_STATS = {
   common:    { hp: 100, light: 8,  easy: 14, medium: 16, hard: 18 },
   rare:      { hp: 110, light: 9,  easy: 16, medium: 18, hard: 20 },
@@ -433,9 +437,22 @@ function loadSaveData() {
   }
 }
 
-function saveData() {
+async function saveData() {
   localStorage.setItem(SAVE_KEYS.koins, String(komboKoins));
   localStorage.setItem(SAVE_KEYS.owned, JSON.stringify(ownedFighterIds));
+
+  const { data: authData } = await supabase.auth.getUser();
+  const user = authData?.user;
+
+  if (!user) return;
+
+  await supabase
+    .from("players")
+    .update({
+      kombo_koins: komboKoins,
+      owned_fighters: ownedFighterIds
+    })
+    .eq("id", user.id);
 }
 
 function isOwned(fighterId) {
@@ -1264,7 +1281,7 @@ rarityKeyBtn.addEventListener("click", () => {
   rarityKeyModal.classList.remove("hidden");
 });
 
-loginBtn.addEventListener("click", () => {
+signupBtn.addEventListener("click", async () => {
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
 
@@ -1272,12 +1289,52 @@ loginBtn.addEventListener("click", () => {
     authMessage.textContent = "Enter username and password.";
     return;
   }
+
+  authMessage.textContent = "Creating account...";
+
+  const email = usernameToEmail(username);
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password
+  });
+
+  if (error) {
+    authMessage.textContent = error.message;
+    return;
+  }
+
+  const user = data.user;
+  if (!user) {
+    authMessage.textContent = "Could not create account.";
+    return;
+  }
+
+  const { error: insertError } = await supabase
+    .from("players")
+    .insert({
+      id: user.id,
+      username: username,
+      kombo_koins: 1000,
+      owned_fighters: ["slime_guy", "rocko", "stingster"]
+    });
+
+  if (insertError) {
+    authMessage.textContent = insertError.message;
+    return;
+  }
+
+  komboKoins = 1000;
+  ownedFighterIds = ["slime_guy", "rocko", "stingster"];
+  updateCurrencyUI();
+  renderFightersScreen();
+  renderFighterSelect();
 
   authMessage.textContent = "";
   showScreen(menuScreen);
 });
 
-signupBtn.addEventListener("click", () => {
+loginBtn.addEventListener("click", async () => {
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
 
@@ -1285,6 +1342,46 @@ signupBtn.addEventListener("click", () => {
     authMessage.textContent = "Enter username and password.";
     return;
   }
+
+  authMessage.textContent = "Logging in...";
+
+  const email = usernameToEmail(username);
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    authMessage.textContent = error.message;
+    return;
+  }
+
+  const user = data.user;
+  if (!user) {
+    authMessage.textContent = "Could not log in.";
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("players")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError) {
+    authMessage.textContent = profileError.message;
+    return;
+  }
+
+  komboKoins = profile.kombo_koins ?? 500;
+  ownedFighterIds = Array.isArray(profile.owned_fighters)
+    ? profile.owned_fighters
+    : ["slime_guy", "rocko", "stingster"];
+
+  updateCurrencyUI();
+  renderFightersScreen();
+  renderFighterSelect();
 
   authMessage.textContent = "";
   showScreen(menuScreen);
@@ -1374,8 +1471,35 @@ controlButtons.forEach((btn) => {
   btn.addEventListener("mouseleave", release);
 });
 
-splashScreen.addEventListener("click", () => showScreen(loginScreen));
-splashScreen.addEventListener("touchstart", () => showScreen(loginScreen), { passive: true });
+async function goFromSplash() {
+  const { data } = await supabase.auth.getUser();
+
+  if (data?.user) {
+    const { data: profile, error } = await supabase
+      .from("players")
+      .select("*")
+      .eq("id", data.user.id)
+      .single();
+
+    if (!error && profile) {
+      komboKoins = profile.kombo_koins ?? 500;
+      ownedFighterIds = Array.isArray(profile.owned_fighters)
+        ? profile.owned_fighters
+        : ["slime_guy", "rocko", "stingster"];
+
+      updateCurrencyUI();
+      renderFightersScreen();
+      renderFighterSelect();
+      showScreen(menuScreen);
+      return;
+    }
+  }
+
+  showScreen(loginScreen);
+}
+
+splashScreen.addEventListener("click", goFromSplash);
+splashScreen.addEventListener("touchstart", goFromSplash, { passive: true });
 
 loadSaveData();
 updateCurrencyUI();
@@ -1436,3 +1560,7 @@ document.addEventListener("touchend", (e) => {
 
   lastTouchEnd = now;
 }, { passive: false });
+
+function usernameToEmail(username) {
+  return `${username.trim().toLowerCase()}@kombokombat.invalid`;
+}
