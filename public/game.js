@@ -261,9 +261,16 @@ let fightActive = false;
 let playerWonLastMatch = false;
 let roundResults = [];
 let playerRoundsWon = 0;
+let multiplayerMatchStarting = false;
 let enemyRoundsWon = 0;
 let currentRoundNumber = 1;
 let currentMatchMap = null;
+let roomChannel = null;
+let multiplayerSide = null; // "host" or "guest"
+let remoteSelectedFighterId = null;
+let localReady = false;
+let remoteReady = false;
+let remoteInputBuffer = [];
 
 let playerBuffer = [];
 let playerLastInputTime = 0;
@@ -358,6 +365,8 @@ const fighterSelectGrid = document.getElementById("fighterSelectGrid");
 const readyUpBtn = document.getElementById("readyUpBtn");
 const selectedFighterPreview = document.getElementById("selectedFighterPreview");
 const selectedPreviewCard = document.getElementById("selectedPreviewCard");
+const remoteFighterPreview = document.getElementById("remoteFighterPreview");
+const remotePreviewCard = document.getElementById("remotePreviewCard");
 const countdownText = document.getElementById("countdownText");
 
 const fighterInspectModal = document.getElementById("fighterInspectModal");
@@ -567,6 +576,18 @@ function renderFighterSelect() {
     card.addEventListener("click", () => {
       const fighterId = card.dataset.fighterId;
       selectedFighter = getOwnedFighters().find((fighter) => fighter.id === fighterId);
+
+      if (currentMode === "player" && roomChannel) {
+  roomChannel.send({
+    type: "broadcast",
+    event: "fighter_select",
+    payload: {
+      fighterId: selectedFighter.id,
+      side: multiplayerSide
+    }
+  });
+}
+
       readyUpBtn.disabled = false;
       renderSelectedPreview();
       renderFighterSelect();
@@ -589,6 +610,28 @@ function renderSelectedPreview() {
     <div>
       <div class="previewInfoName">${selectedFighter.name}</div>
       <div class="previewInfoMeta">${selectedFighter.rarity.toUpperCase()} fighter</div>
+    </div>
+  `;
+}
+
+function renderRemoteSelectedPreview() {
+  if (!remoteSelectedFighterId) {
+    remoteFighterPreview.classList.add("hidden");
+    remotePreviewCard.innerHTML = "";
+    return;
+  }
+
+  const fighter = getFighterById(remoteSelectedFighterId);
+  if (!fighter) return;
+
+  remoteFighterPreview.classList.remove("hidden");
+  remotePreviewCard.innerHTML = `
+    <div class="previewThumb rarityGlow-${fighter.rarity}">
+      <img src="${fighter.image}" alt="${fighter.name}" class="previewThumbImg" />
+    </div>
+    <div>
+      <div class="previewInfoName">${fighter.name}</div>
+      <div class="previewInfoMeta">${fighter.rarity.toUpperCase()} fighter</div>
     </div>
   `;
 }
@@ -667,8 +710,15 @@ function goToFighters() {
 
 function goToFighterSelect() {
   readyUpBtn.disabled = true;
+  readyUpBtn.textContent = "Ready Up";
   selectedFighter = null;
+  remoteSelectedFighterId = null;
+  localReady = false;
+  remoteReady = false;
+  multiplayerMatchStarting = false;
+
   renderSelectedPreview();
+  renderRemoteSelectedPreview();
   renderFighterSelect();
   showScreen(fighterSelectScreen);
 }
@@ -705,6 +755,45 @@ function setupPlayersFromSelection() {
   player1.image = chosen.image;
 
   let enemyFighter;
+
+  if (currentMode === "player" && selectedFighter && remoteSelectedFighterId) {
+  const enemyFighter = getFighterById(remoteSelectedFighterId);
+
+  player1.name = selectedFighter.name;
+  player1.rarity = selectedFighter.rarity;
+  player1.image = selectedFighter.image;
+
+  player2.name = enemyFighter.name;
+  player2.rarity = enemyFighter.rarity;
+  player2.image = enemyFighter.image;
+
+  const p1Stats = RARITY_STATS[player1.rarity];
+  const p2Stats = RARITY_STATS[player2.rarity];
+
+  player1.maxHp = p1Stats.hp;
+  player1.currentHp = p1Stats.hp;
+  player2.maxHp = p2Stats.hp;
+  player2.currentHp = p2Stats.hp;
+
+  p1Name.textContent = player1.name;
+  p2Name.textContent = player2.name;
+  p1Label.textContent = player1.name;
+  p2Label.textContent = player2.name;
+
+  p1Rarity.textContent = player1.rarity;
+  p2Rarity.textContent = player2.rarity;
+  p1Rarity.className = `rarity ${player1.rarity}`;
+  p2Rarity.className = `rarity ${player2.rarity}`;
+
+  p1Sprite.className = `sprite rarityGlow-${player1.rarity}`;
+  p2Sprite.className = `sprite rarityGlow-${player2.rarity}`;
+
+  p1Sprite.innerHTML = `<img src="${player1.image}" alt="${player1.name}" class="battleSpriteImg" />`;
+  p2Sprite.innerHTML = `<img src="${player2.image}" alt="${player2.name}" class="battleSpriteImg enemyFlip" />`;
+
+  updateHealthUI();
+  return;
+}
 
   if (currentMode === "ai") {
     enemyFighter = getRandomAIEnemy(chosen.id);
@@ -1123,7 +1212,7 @@ async function runCountdownAndStart(isNewMatch = true) {
   updateCurrencyUI();
   fightActive = true;
 
-  if (currentMode === "ai" || currentMode === "player") {
+  if (currentMode === "ai") {
     scheduleNextAiStep(650);
   }
 }
@@ -1404,18 +1493,30 @@ vsPlayerBtn.addEventListener("click", () => {
   goToRoomFlow();
 });
 
-createRoomBtn.addEventListener("click", () => {
+createRoomBtn.addEventListener("click", async () => {
   currentRoomCode = generateRoomCode();
   roomCodeDisplay.textContent = currentRoomCode;
+
+  const ok = await connectToRoom(currentRoomCode, "host");
+  if (!ok) return;
+
   roomChoiceWrap.classList.add("hidden");
   createRoomPanel.classList.remove("hidden");
   joinRoomPanel.classList.add("hidden");
 });
 
-joinRoomBtn.addEventListener("click", () => {
-  roomChoiceWrap.classList.add("hidden");
-  joinRoomPanel.classList.remove("hidden");
-  createRoomPanel.classList.add("hidden");
+joinRoomContinueBtn.addEventListener("click", async () => {
+  const code = roomCodeInput.value.trim().toUpperCase();
+  if (!code) {
+    alert("Enter a room code first.");
+    return;
+  }
+
+  const ok = await connectToRoom(code, "guest");
+  if (!ok) return;
+
+  currentRoomCode = code;
+  goToFighterSelect();
 });
 
 hostContinueBtn.addEventListener("click", () => {
@@ -1435,6 +1536,29 @@ joinRoomContinueBtn.addEventListener("click", () => {
 
 readyUpBtn.addEventListener("click", async () => {
   if (!selectedFighter) return;
+
+  if (currentMode === "player") {
+    localReady = true;
+    readyUpBtn.disabled = true;
+    readyUpBtn.textContent = "Waiting for Opponent...";
+
+    if (roomChannel) {
+      roomChannel.send({
+        type: "broadcast",
+        event: "player_ready",
+        payload: {
+          side: multiplayerSide
+        }
+      });
+    }
+
+    if (localReady && remoteReady && !multiplayerMatchStarting) {
+  startMultiplayerMatch();
+}
+
+    return;
+  }
+
   await runCountdownAndStart(true);
 });
 
@@ -1448,9 +1572,14 @@ backButtons.forEach((btn) => {
 
 controlButtons.forEach((btn) => {
   const press = () => {
-    btn.classList.add("pressed");
-    handlePlayerInput(btn.dataset.input);
-  };
+  btn.classList.add("pressed");
+  const input = btn.dataset.input;
+  handlePlayerInput(input);
+
+  if (currentMode === "player") {
+    sendMultiplayerInput(input);
+  }
+};
 
   const release = () => {
     btn.classList.remove("pressed");
@@ -1579,4 +1708,134 @@ function usernameToEmail(username) {
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, "");
   return `${safe}@kombokombat.invalid`;
+}
+
+async function startMultiplayerMatch() {
+  if (multiplayerMatchStarting) return;
+  if (!selectedFighter || !remoteSelectedFighterId) return;
+
+  multiplayerMatchStarting = true;
+  readyUpBtn.textContent = "Ready Up";
+
+  const enemy = getFighterById(remoteSelectedFighterId);
+  if (!enemy) {
+    multiplayerMatchStarting = false;
+    return;
+  }
+
+  player1.name = selectedFighter.name;
+  player1.rarity = selectedFighter.rarity;
+  player1.image = selectedFighter.image;
+
+  player2.name = enemy.name;
+  player2.rarity = enemy.rarity;
+  player2.image = enemy.image;
+
+  await runCountdownAndStart(true);
+  multiplayerMatchStarting = false;
+}
+
+async function connectToRoom(roomCode, side) {
+  multiplayerSide = side;
+
+  if (roomChannel) {
+    await supabaseClient.removeChannel(roomChannel);
+    roomChannel = null;
+  }
+
+  roomChannel = supabaseClient.channel(`room:${roomCode}`, {
+    config: {
+      broadcast: { self: false },
+      presence: { key: `${side}-${Math.random().toString(36).slice(2, 8)}` }
+    }
+  });
+
+  roomChannel
+    .on("broadcast", { event: "player_input" }, ({ payload }) => {
+      if (!fightActive || matchOver) return;
+
+      if (payload.side !== multiplayerSide) {
+        handleRemotePlayerInput(payload.input);
+      }
+    })
+    .on("broadcast", { event: "fighter_select" }, ({ payload }) => {
+  if (payload.side !== multiplayerSide) {
+    remoteSelectedFighterId = payload.fighterId;
+    renderRemoteSelectedPreview();
+  }
+})
+
+.on("broadcast", { event: "player_ready" }, ({ payload }) => {
+  if (payload.side !== multiplayerSide) {
+    remoteReady = true;
+
+    if (localReady && remoteReady && !multiplayerMatchStarting) {
+  startMultiplayerMatch();
+}
+  }
+})
+
+    .on("presence", { event: "sync" }, () => {
+      const state = roomChannel.presenceState();
+      console.log("Presence sync:", state);
+    });
+
+  const status = await roomChannel.subscribe();
+
+  if (status !== "SUBSCRIBED") {
+    alert("Failed to join room.");
+    return false;
+  }
+
+  await roomChannel.track({
+    side,
+    roomCode
+  });
+
+  return true;
+}
+
+async function sendMultiplayerInput(input) {
+  if (!roomChannel || currentMode !== "player") return;
+
+  await roomChannel.send({
+    type: "broadcast",
+    event: "player_input",
+    payload: {
+      input,
+      side: multiplayerSide,
+      time: Date.now()
+    }
+  });
+}
+
+function handleRemotePlayerInput(input) {
+  if (!fightActive || matchOver) return;
+
+  const now = Date.now();
+
+  if (now - aiLastInputTime > INPUT_BUFFER_TIMEOUT) {
+    aiBuffer = [];
+  }
+
+  if (now < aiCooldownUntil) {
+    return;
+  }
+
+  aiLastInputTime = now;
+  aiBuffer.push(input);
+
+  if (aiBuffer.length > 5) {
+    aiBuffer.shift();
+  }
+
+  const enemyData =
+    getAllFightersWithOwnership().find(f => f.name === player2.name) ||
+    getFighterById("red_bruiser");
+
+  const move = getMoveFromBuffer(enemyData, aiBuffer);
+
+  if (move) {
+    triggerAiMove(move);
+  }
 }
