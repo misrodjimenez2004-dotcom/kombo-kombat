@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
+  <title>Kombo Kombat</title>
+  <link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#111111" />
+
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Kombo Kombat" />
+
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- SPLASH -->
+    <section id="splashScreen" class="screen active">
+      <div class="screenBg splashBg"></div>
+
+      <div class="splashContent">
+        <img id="splashLogoImg" class="logoImage" src="logo.png" alt="Kombo Kombat logo" />
+        <div id="tapToPlay">Tap to Play</div>
+      </div>
+    </section>
+
+    <section id="loginScreen" class="screen hidden">
+  <div class="screenBg menuBg"></div>
+
+  <div class="subScreenWrap loginWrap">
+    <div class="loginCard">
+      <h2>Login</h2>
+
+      <input id="usernameInput" class="roomInput" type="text" placeholder="Username (for sign up)" />
+      <input id="passwordInput" class="roomInput" type="password" placeholder="Password" />
+
+      <button id="loginBtn" class="menuBtn primary">Login</button>
+      <button id="signupBtn" class="menuBtn">Sign Up</button>
+
+      <div id="authMessage" class="panelText"></div>
+    </div>
+  </div>
+</section>
+
+    <!-- MAIN MENU -->
+    <section id="menuScreen" class="screen hidden">
+      <div class="screenBg menuBg"></div>
+
+      <div class="menuWrap">
+        <div class="menuTop">
+          <img id="menuLogoImg" class="logoImage menuLogoImage" src="logo.png" alt="Kombo Kombat logo" />
+          <div class="menuSubtitle">Pixel Figurine Combo Battles</div>
+          <div id="menuCurrency" class="currencyPill">Kombo Koins: 0</div>
+        </div>
+
+        <div class="menuButtons">
+          <button id="playBtn" class="menuBtn primary">Play</button>
+          <button id="machineBtn" class="menuBtn machineBtn">THE MACHINE</button>
+          <button id="fightersBtn" class="menuBtn">Fighters</button>
+          <button id="settingsBtn" class="menuBtn">Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MACHINE SCREEN -->
+    <section id="machineScreen" class="screen hidden">
+      <div class="screenBg menuBg"></div>
+
+      <div class="subScreenWrap">
+        <div class="subHeader">
+          <button class="backBtn" data-back="menu">←</button>
+          <h2>THE MACHINE</h2>
+          <div class="backSpacer"></div>
+        </div>
+
+        <div class="machineCurrencyWrap">
+          <div id="machineCurrency" class="currencyPill">Kombo Koins: 0</div>
+        </div>
+
+        <div class="machineWrap">
+  <div class="machineSubtitle">Black Market Capsule Exchange</div>
+
+  <div class="machineImageWrap">
+  <img src="assets/machine.png" class="machineImage" />
+</div>
+  <button id="pullMachineBtn" class="menuBtn primary machinePullBtn">EXTRACT FIGHTER - 100 KOINS</button>
+</div>
+
+<div id="machineRevealOverlay" class="machineRevealOverlay hidden">
+  <div id="machineFlash" class="machineFlash"></div>
+
+  <div id="capsuleReveal" class="capsuleReveal hidden">
+    <div id="revealCapsule" class="revealCapsule">
+      <img src="assets/capsule.png" class="capsuleImage" alt="Capsule" />
+    </div>
+  </div>
+
+  <div id="fighterRevealCard" class="fighterRevealCard hidden">
+    <div id="fighterRevealThumb" class="fighterRevealThumb"></div>
+    <div id="fighterRevealName" class="fighterRevealName">Slime Guy</div>
+    <div id="fighterRevealRarity" class="fighterRevealRarity common">Common</div>
+    <div id="fighterRevealStatus" class="fighterRevealStatus">New Fighter Unlocked!</div>
+    <button id="closeRevealBtn" class="menuBtn primary">Continue</button>
+  </div>
+</div>
+
+        <div id="machineResultPanel" class="panel hidden">
+          <div class="panelTitle">Capsule Result</div>
+          <div id="machineResultCard" class="machineResultCard"></div>
+          <div id="machineResultText" class="panelText"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLAY MODE SCREEN -->
+    <section id="playModeScreen" class="screen hidden">
+      <div class="screenBg menuBg"></div>
+
+      <div class="subScreenWrap">
+        <div class="subHeader">
+          <button class="backBtn" data-back="menu">←</button>
+          <h2>Choose Mode</h2>
+          <div class="backSpacer"></div>
+        </div>
+
+        <div class="bigOptionList">
+          <button id="vsAiBtn" class="menuBtn primary">Play Against AI</button>
+          <button id="vsPlayerBtn" class="menuBtn">Play Against Player</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROOM SCREEN -->
+    <section id="roomScreen" class="screen hidden">
+      <div class="screenBg menuBg"></div>
+
+      <div class="subScreenWrap">
+        <div class="subHeader">
+          <button class="backBtn" data-back="playmode">←</button>
+          <h2>Player Match</h2>
+          <div class="backSpacer"></div>
+        </div>
+
+        <div id="roomChoiceWrap" class="bigOptionList">
+          <button id="createRoomBtn" class="menuBtn primary">Create Room</button>
+          <button id="joinRoomBtn" class="menuBtn">Join Room</button>
+        </div>
+
+        <div id="createRoomPanel" class="panel hidden">
+          <div class="panelTitle">Room Created</div>
+          <div id="roomCodeDisplay" class="roomCodeBox">ABCD12</div>
+          <div class="panelText">Share this code with your friend.</div>
+          <button id="hostContinueBtn" class="menuBtn primary">Continue</button>
+        </div>
+
+        <div id="joinRoomPanel" class="panel hidden">
+          <div class="panelTitle">Join Room</div>
+          <input id="roomCodeInput" class="roomInput" maxlength="6" placeholder="Enter Room Code" />
+          <button id="joinRoomContinueBtn" class="menuBtn primary">Continue</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- FIGHTERS / COLLECTION -->
+<section id="fightersScreen" class="screen hidden">
+  <img id="rarityKeyBtn" src="assets/key.png" class="rarityKeyBtn" />
+  <div class="screenBg menuBg"></div>
+
+  <div class="subScreenWrap">
+    <div class="subHeader">
+      <button class="backBtn" data-back="menu">←</button>
+      <h2>Fighters</h2>
+      <div class="backSpacer"></div>
+    </div>
+
+    <div id="fightersGrid" class="fightersGrid"></div>
+  </div>
+
+<div id="rarityKeyModal" class="hidden">
+  <div class="rarityKeyOverlay"></div>
+
+  <div class="rarityKeyPanel">
+    <h2>Rarity Key</h2>
+
+    <div class="rarityRow common">Common — HP: 100 | L: 8 | E: 14 | M: 16 | H: 18</div>
+    <div class="rarityRow rare">Rare — HP: 110 | L: 9 | E: 16 | M: 18 | H: 20</div>
+    <div class="rarityRow epic">Epic — HP: 120 | L: 10 | E: 18 | M: 20 | H: 22</div>
+    <div class="rarityRow legendary">Legendary — HP: 130 | L: 11 | E: 20 | M: 22 | H: 24</div>
+    <div class="rarityRow mythic">Mythic — HP: 140 | L: 12 | E: 22 | M: 24 | H: 26</div>
+
+    <button id="closeKeyBtn">Close</button>
+  </div>
+</div>
+
+  <div id="fighterInspectModal" class="hidden">
+    <div style="position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:100;"></div>
+
+    <div style="
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%, -50%);
+      background:#111;
+      color:white;
+      padding:20px;
+      border-radius:12px;
+      z-index:101;
+      width:90%;
+      max-width:350px;
+      text-align:center;
+    ">
+      <button id="closeInspectBtn">Close</button>
+
+      <img id="inspectImage" style="width:120px; margin:10px auto; display:block;" />
+
+      <h2 id="inspectName">Name</h2>
+      <div id="inspectRarity">Common</div>
+
+      <div style="margin:10px 0;">
+        <div style="background:#333; height:20px; border-radius:10px; position:relative;">
+          <div id="inspectHpBarFill" style="background:lime; height:100%; width:100%; border-radius:10px;"></div>
+          <div id="inspectHpText" style="position:absolute; width:100%; top:0; left:0; text-align:center; font-size:12px;">100 HP</div>
+        </div>
+      </div>
+
+      <div id="inspectMovesList"></div>
+    </div>
+  </div>
+</section>
+
+    <!-- FIGHTER SELECT -->
+    <section id="fighterSelectScreen" class="screen hidden">
+      <div class="screenBg menuBg"></div>
+
+      <div class="subScreenWrap">
+        <div class="subHeader">
+          <button class="backBtn" data-back="modeflow">←</button>
+          <h2>Select Your Fighter</h2>
+          <div class="backSpacer"></div>
+        </div>
+
+        <div id="selectedFighterPreview" class="selectedPreview hidden">
+          <div class="selectedPreviewTitle">Selected Fighter</div>
+          <div id="selectedPreviewCard" class="previewCard"></div>
+        </div>
+
+        <div id="fighterSelectGrid" class="fightersGrid selectable"></div>
+
+        <button id="readyUpBtn" class="menuBtn primary readyBtn" disabled>Ready Up</button>
+      </div>
+    </section>
+
+    <!-- COUNTDOWN -->
+    <section id="countdownScreen" class="screen hidden">
+      <div class="screenBg countdownBg"></div>
+      <div id="countdownText">3</div>
+    </section>
+
+    <section id="resultScreen" class="screen hidden">
+  <div class="screenBg splashBg"></div>
+
+  <div class="resultScreenContent">
+    <div id="resultTitle" class="resultTitle">You Won</div>
+    <div id="resultReward" class="resultReward">+15 Kombo Koins</div>
+
+    <div class="resultButtons">
+      <button id="playAgainBtn" class="menuBtn primary">Play Again</button>
+      <button id="continueBtn" class="menuBtn">Continue</button>
+    </div>
+  </div>
+</section>
+
+    <!-- GAME -->
+    <section id="gameScreen" class="screen hidden">
+      <div id="game">
+        <div id="mapLayer"></div>
+        <div id="hitFlash"></div>
+
+        <div id="roundTracker" class="roundTracker">
+  <div class="roundDot" id="roundDot0"></div>
+  <div class="roundDot" id="roundDot1"></div>
+  <div class="roundDot" id="roundDot2"></div>
+</div>
+
+<div id="koOverlay" class="koOverlay hidden">
+  <div id="koText" class="koText">K.O.</div>
+</div>
+
+          <header id="topHud">
+          <div class="hudCard left">
+            <div class="fighterInfo">
+              <div id="p1Name">Slime Guy</div>
+              <div id="p1Rarity" class="rarity common">Common</div>
+            </div>
+            <div class="healthBarFrame">
+              <div id="p1HealthBar" class="healthBarFill"></div>
+            </div>
+            <div id="p1HpText" class="hpText">100 / 100</div>
+          </div>
+
+          <div class="hudCenter">
+            <div id="battleCurrency" class="currencyPill small">Kombo Koins: 0</div>
+          </div>
+
+          <div class="hudCard right">
+            <div class="fighterInfo">
+              <div id="p2Name">CPU Bruiser</div>
+              <div id="p2Rarity" class="rarity rare">Rare</div>
+            </div>
+            <div class="healthBarFrame">
+              <div id="p2HealthBar" class="healthBarFill enemy"></div>
+            </div>
+            <div id="p2HpText" class="hpText">110 / 110</div>
+          </div>
+        </header>
+
+        <main id="arena">
+          <div id="p1" class="fighter fighter-left">
+            <div id="p1Sprite" class="sprite rarityGlow-common">P1</div>
+            <div class="fighterLabel" id="p1Label">Slime Guy</div>
+          </div>
+
+          <div id="damageLayer"></div>
+
+          <div id="p2" class="fighter fighter-right">
+            <div id="p2Sprite" class="sprite rarityGlow-rare">P2</div>
+            <div class="fighterLabel" id="p2Label">CPU Bruiser</div>
+          </div>
+        </main>
+
+        <section id="bottomHud">
+
+          <div id="controls">
+            <div id="pad">
+              <button class="controlBtn up" data-input="up">↑</button>
+              <button class="controlBtn left" data-input="left">←</button>
+              <button class="controlBtn attack" data-input="attack">●</button>
+              <button class="controlBtn right" data-input="right">→</button>
+              <button class="controlBtn down" data-input="down">↓</button>
+            </div>
+          </div>
+        </section>
+        <button id="newMatchBtn">New Match</button>
+        <button id="backToMenuBtn">Menu</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
