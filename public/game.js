@@ -1574,5 +1574,9 @@ document.addEventListener("touchend", (e) => {
 }, { passive: false });
 
 function usernameToEmail(username) {
-  return `${username.trim().toLowerCase()}@kombokombat.invalid`;
+  const safe = username
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "");
+  return `${safe}@kombokombat.invalid`;
 }
