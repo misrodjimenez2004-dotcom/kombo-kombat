@@ -1536,7 +1536,7 @@ readyUpBtn.addEventListener("click", async () => {
     readyUpBtn.textContent = "Waiting for Opponent...";
 
     if (roomChannel) {
-      roomChannel.send({
+      await roomChannel.send({
         type: "broadcast",
         event: "player_ready",
         payload: {
@@ -1545,9 +1545,20 @@ readyUpBtn.addEventListener("click", async () => {
       });
     }
 
-    if (localReady && remoteReady && !multiplayerMatchStarting) {
-  startMultiplayerMatch();
-}
+    if (
+      localReady &&
+      remoteReady &&
+      multiplayerSide === "host" &&
+      roomChannel
+    ) {
+      await roomChannel.send({
+        type: "broadcast",
+        event: "start_match",
+        payload: {
+          roomCode: currentRoomCode
+        }
+      });
+    }
 
     return;
   }
@@ -1725,7 +1736,6 @@ async function startMultiplayerMatch() {
   player2.image = enemy.image;
 
   await runCountdownAndStart(true);
-  multiplayerMatchStarting = false;
 }
 
 async function connectToRoom(roomCode, side) {
@@ -1757,15 +1767,32 @@ async function connectToRoom(roomCode, side) {
         renderRemoteSelectedPreview();
       }
     })
-    .on("broadcast", { event: "player_ready" }, ({ payload }) => {
-      if (payload.side !== multiplayerSide) {
-        remoteReady = true;
+    .on("broadcast", { event: "start_match" }, async ({ payload }) => {
+  if (!selectedFighter || !remoteSelectedFighterId) return;
+  if (multiplayerMatchStarting) return;
 
-        if (localReady && remoteReady && !multiplayerMatchStarting) {
-          startMultiplayerMatch();
+  await startMultiplayerMatch();
+})
+    .on("broadcast", { event: "player_ready" }, async ({ payload }) => {
+  if (payload.side !== multiplayerSide) {
+    remoteReady = true;
+
+    if (
+      localReady &&
+      remoteReady &&
+      multiplayerSide === "host" &&
+      roomChannel
+    ) {
+      await roomChannel.send({
+        type: "broadcast",
+        event: "start_match",
+        payload: {
+          roomCode: currentRoomCode
         }
-      }
-    })
+      });
+    }
+  }
+})
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
       console.log("Presence sync:", state);
