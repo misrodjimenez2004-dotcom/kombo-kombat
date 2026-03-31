@@ -408,8 +408,6 @@ const resultTitle = document.getElementById("resultTitle");
 const resultReward = document.getElementById("resultReward");
 const playAgainBtn = document.getElementById("playAgainBtn");
 const roundTracker = document.getElementById("roundTracker");
-const roundOverlay = document.getElementById("roundOverlay");
-const roundOverlayText = document.getElementById("roundOverlayText");
 const roundDot0 = document.getElementById("roundDot0");
 const roundDot1 = document.getElementById("roundDot1");
 const roundDot2 = document.getElementById("roundDot2");
@@ -1472,31 +1470,45 @@ controlButtons.forEach((btn) => {
 });
 
 async function goFromSplash() {
-  const { data } = await supabase.auth.getUser();
+  try {
+    const { data, error } = await supabase.auth.getUser();
 
-  if (data?.user) {
-    const { data: profile, error } = await supabase
-      .from("players")
-      .select("*")
-      .eq("id", data.user.id)
-      .single();
-
-    if (!error && profile) {
-      komboKoins = profile.kombo_koins ?? 500;
-      ownedFighterIds = Array.isArray(profile.owned_fighters)
-        ? profile.owned_fighters
-        : ["slime_guy", "rocko", "stingster"];
-
-      updateCurrencyUI();
-      renderFightersScreen();
-      renderFighterSelect();
-      showScreen(menuScreen);
+    if (error) {
+      console.log("getUser error:", error);
+      showScreen(loginScreen);
       return;
     }
-  }
 
-  showScreen(loginScreen);
+    if (data?.user) {
+      const { data: profile, error: profileError } = await supabase
+        .from("players")
+        .select("*")
+        .eq("id", data.user.id)
+        .single();
+
+      if (!profileError && profile) {
+        komboKoins = profile.kombo_koins ?? 500;
+        ownedFighterIds = Array.isArray(profile.owned_fighters)
+          ? profile.owned_fighters
+          : ["slime_guy", "rocko", "stingster"];
+
+        updateCurrencyUI();
+        renderFightersScreen();
+        renderFighterSelect();
+        showScreen(menuScreen);
+        return;
+      }
+    }
+
+    showScreen(loginScreen);
+  } catch (err) {
+    console.log("Splash error:", err);
+    showScreen(loginScreen);
+  }
 }
+
+splashScreen.addEventListener("click", goFromSplash);
+splashScreen.addEventListener("touchstart", goFromSplash, { passive: true });
 
 splashScreen.addEventListener("click", goFromSplash);
 splashScreen.addEventListener("touchstart", goFromSplash, { passive: true });
