@@ -1051,6 +1051,43 @@ async function endMatch(playerWonRound) {
   fightActive = false;
   stopCombatLoops();
 
+  if (currentMode === "player") {
+    if (multiplayerSide === "host") {
+      await showKO();
+      await sendRoundResult(playerWonRound);
+
+      if (playerWonRound) {
+        playerRoundsWon += 1;
+        roundResults.push("player");
+      } else {
+        enemyRoundsWon += 1;
+        roundResults.push("enemy");
+      }
+
+      updateRoundTrackerUI();
+
+      const playerWonMatch = playerRoundsWon >= 2;
+      const enemyWonMatch = enemyRoundsWon >= 2;
+
+      if (playerWonMatch || enemyWonMatch) {
+        const reward = playerWonMatch ? WIN_REWARD : LOSS_REWARD;
+        addKoins(reward);
+        showMatchReward(playerWonMatch);
+
+        setTimeout(() => {
+          showScreen(resultScreen);
+        }, 400);
+
+        return;
+      }
+
+      currentRoundNumber += 1;
+      await runCountdownAndStart(false, sharedMatchStartTime);
+    }
+
+    return;
+  }
+
   await showKO();
 
   if (playerWonRound) {
@@ -1187,6 +1224,44 @@ function chooseMatchMap() {
 function applyCurrentMatchMap() {
   if (currentMatchMap) {
     mapLayer.style.backgroundImage = `url("${currentMatchMap}")`;
+  }
+}
+
+async function sendRoundResult(playerWonRound) {
+  if (!roomChannel || currentMode !== "player" || multiplayerSide !== "host") return;
+
+  const nextPlayerRoundsWon = playerWonRound ? playerRoundsWon + 1 : playerRoundsWon;
+  const nextEnemyRoundsWon = playerWonRound ? enemyRoundsWon : enemyRoundsWon + 1;
+
+  const playerWonMatch = nextPlayerRoundsWon >= 2;
+  const enemyWonMatch = nextEnemyRoundsWon >= 2;
+
+  if (playerWonMatch || enemyWonMatch) {
+    await roomChannel.send({
+      type: "broadcast",
+      event: "match_over",
+      payload: {
+        playerWonMatch,
+        enemyWonMatch,
+        playerRoundsWon: nextPlayerRoundsWon,
+        enemyRoundsWon: nextEnemyRoundsWon
+      }
+    });
+  } else {
+    const nextStartAt = Date.now() + 4000;
+
+    await roomChannel.send({
+      type: "broadcast",
+      event: "round_result",
+      payload: {
+        playerWonRound,
+        playerRoundsWon: nextPlayerRoundsWon,
+        enemyRoundsWon: nextEnemyRoundsWon,
+        nextStartAt
+      }
+    });
+
+    sharedMatchStartTime = nextStartAt;
   }
 }
 
@@ -1885,6 +1960,57 @@ async function connectToRoom(roomCode, side) {
   renderRemoteSelectedPreview();
   await startMultiplayerMatch(remoteSelectedFighterId, payload.startAt, payload.map);
 })
+
+.on("broadcast", { event: "round_result" }, async ({ payload }) => {
+  if (multiplayerSide === "host") return;
+
+  matchOver = true;
+  fightActive = false;
+  stopCombatLoops();
+
+  playerRoundsWon = payload.playerRoundsWon;
+  enemyRoundsWon = payload.enemyRoundsWon;
+  sharedMatchStartTime = payload.nextStartAt;
+
+  roundResults = [];
+  for (let i = 0; i < playerRoundsWon; i++) roundResults.push("player");
+  for (let i = 0; i < enemyRoundsWon; i++) roundResults.push("enemy");
+
+  updateRoundTrackerUI();
+
+  await showKO();
+
+  currentRoundNumber += 1;
+  await runCountdownAndStart(false, sharedMatchStartTime);
+})
+.on("broadcast", { event: "match_over" }, async ({ payload }) => {
+  if (multiplayerSide === "host") return;
+
+  matchOver = true;
+  fightActive = false;
+  stopCombatLoops();
+
+  playerRoundsWon = payload.playerRoundsWon;
+  enemyRoundsWon = payload.enemyRoundsWon;
+
+  roundResults = [];
+  for (let i = 0; i < playerRoundsWon; i++) roundResults.push("player");
+  for (let i = 0; i < enemyRoundsWon; i++) roundResults.push("enemy");
+
+  updateRoundTrackerUI();
+
+  await showKO();
+
+  const didPlayerWin = payload.playerWonMatch;
+  const reward = didPlayerWin ? WIN_REWARD : LOSS_REWARD;
+  addKoins(reward);
+  showMatchReward(didPlayerWin);
+
+  setTimeout(() => {
+    showScreen(resultScreen);
+  }, 400);
+})
+
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
       console.log("Presence sync:", state);
