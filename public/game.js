@@ -265,6 +265,7 @@ let multiplayerMatchStarting = false;
 let enemyRoundsWon = 0;
 let currentRoundNumber = 1;
 let currentMatchMap = null;
+let sharedMatchStartTime = null;
 let roomChannel = null;
 let multiplayerSide = null; // "host" or "guest"
 let remoteSelectedFighterId = null;
@@ -850,6 +851,10 @@ function flashRed() {
   }, 110);
 }
 
+function getRandomMap() {
+  return MAPS[Math.floor(Math.random() * MAPS.length)];
+}
+
 function shakeTarget(targetEl) {
   targetEl.classList.remove("hitShake");
   void targetEl.offsetWidth;
@@ -1175,7 +1180,7 @@ function resetRoundHpOnly() {
 }
 
 function chooseMatchMap() {
-  currentMatchMap = MAPS[Math.floor(Math.random() * MAPS.length)];
+  currentMatchMap = getRandomMap();
   mapLayer.style.backgroundImage = `url("${currentMatchMap}")`;
 }
 
@@ -1189,23 +1194,59 @@ function prepareMatch(isNewMatch = true) {
   resetCombatState();
 
   if (isNewMatch) {
-    resetMatchRounds();
-    chooseMatchMap();
-    setupPlayersFromSelection();
-  } else {
-    resetRoundHpOnly();
+  resetMatchRounds();
+
+  if (currentMode === "player") {
     applyCurrentMatchMap();
+  } else {
+    chooseMatchMap();
   }
+
+  setupPlayersFromSelection();
+} else {
+  resetRoundHpOnly();
+  applyCurrentMatchMap();
+}
 }
 
-async function runCountdownAndStart(isNewMatch = true) {
+async function runCountdownAndStart(isNewMatch = true, forcedStartTime = null) {
   prepareMatch(isNewMatch);
+
+  if (currentMatchMap) {
+    mapLayer.style.backgroundImage = `url("${currentMatchMap}")`;
+  }
+
   showScreen(countdownScreen);
 
-  const sequence = ["3", "2", "1", "FIGHT"];
-  for (const item of sequence) {
-    countdownText.textContent = item;
-    await new Promise((resolve) => setTimeout(resolve, item === "FIGHT" ? 700 : 600));
+  if (forcedStartTime) {
+    while (Date.now() < forcedStartTime - 3000) {
+      countdownText.textContent = "";
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    countdownText.textContent = "3";
+    while (Date.now() < forcedStartTime - 2000) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    countdownText.textContent = "2";
+    while (Date.now() < forcedStartTime - 1000) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    countdownText.textContent = "1";
+    while (Date.now() < forcedStartTime) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    countdownText.textContent = "FIGHT";
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  } else {
+    const sequence = ["3", "2", "1", "FIGHT"];
+    for (const item of sequence) {
+      countdownText.textContent = item;
+      await new Promise((resolve) => setTimeout(resolve, item === "FIGHT" ? 700 : 600));
+    }
   }
 
   showScreen(gameScreen);
@@ -1563,16 +1604,24 @@ readyUpBtn.addEventListener("click", async () => {
       selectedFighter &&
       remoteSelectedFighterId
     ) {
-      await roomChannel.send({
-        type: "broadcast",
-        event: "start_match",
-        payload: {
-          hostFighterId: selectedFighter.id,
-          guestFighterId: remoteSelectedFighterId
-        }
-      });
+      const startAt = Date.now() + 4000;
+      const chosenMap = getRandomMap();
 
-      await startMultiplayerMatch(remoteSelectedFighterId);
+      await roomChannel.send({
+       type: "broadcast",
+       event: "start_match",
+       payload: {
+       hostFighterId: selectedFighter.id,
+       guestFighterId: remoteSelectedFighterId,
+       map: chosenMap,
+       startAt
+  }
+});
+
+     currentMatchMap = chosenMap;
+     sharedMatchStartTime = startAt;
+
+    await startMultiplayerMatch(remoteSelectedFighterId, startAt, chosenMap);
     }
 
     return;
@@ -1726,7 +1775,7 @@ function usernameToEmail(username) {
   return `${safe}@kombokombat.invalid`;
 }
 
-async function startMultiplayerMatch(enemyFighterId = null) {
+async function startMultiplayerMatch(enemyFighterId = null, startAt = null, map = null) {
   if (multiplayerMatchStarting) return;
   if (!selectedFighter) return;
 
@@ -1750,7 +1799,15 @@ async function startMultiplayerMatch(enemyFighterId = null) {
   player2.rarity = enemy.rarity;
   player2.image = enemy.image;
 
-  await runCountdownAndStart(true);
+  if (map) {
+    currentMatchMap = map;
+  }
+
+  if (startAt) {
+    sharedMatchStartTime = startAt;
+  }
+
+  await runCountdownAndStart(true, sharedMatchStartTime);
 }
 
 async function connectToRoom(roomCode, side) {
@@ -1813,18 +1870,21 @@ async function connectToRoom(roomCode, side) {
       }
     })
     .on("broadcast", { event: "start_match" }, async ({ payload }) => {
-      if (multiplayerMatchStarting) return;
-      if (!selectedFighter) return;
+  if (multiplayerMatchStarting) return;
+  if (!selectedFighter) return;
 
-      if (multiplayerSide === "host") {
-        remoteSelectedFighterId = payload.guestFighterId;
-      } else {
-        remoteSelectedFighterId = payload.hostFighterId;
-      }
+  if (multiplayerSide === "host") {
+    remoteSelectedFighterId = payload.guestFighterId;
+  } else {
+    remoteSelectedFighterId = payload.hostFighterId;
+  }
 
-      renderRemoteSelectedPreview();
-      await startMultiplayerMatch(remoteSelectedFighterId);
-    })
+  currentMatchMap = payload.map;
+  sharedMatchStartTime = payload.startAt;
+
+  renderRemoteSelectedPreview();
+  await startMultiplayerMatch(remoteSelectedFighterId, payload.startAt, payload.map);
+})
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
       console.log("Presence sync:", state);
