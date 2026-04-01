@@ -1494,6 +1494,9 @@ vsPlayerBtn.addEventListener("click", () => {
 });
 
 createRoomBtn.addEventListener("click", async () => {
+  const user = await requireLoggedInUser();
+  if (!user) return;
+
   currentRoomCode = generateRoomCode();
   roomCodeDisplay.textContent = currentRoomCode;
 
@@ -1516,12 +1519,18 @@ hostContinueBtn.addEventListener("click", () => {
   goToFighterSelect();
 });
 
-joinRoomContinueBtn.addEventListener("click", () => {
+joinRoomContinueBtn.addEventListener("click", async () => {
+  const user = await requireLoggedInUser();
+  if (!user) return;
+
   const code = roomCodeInput.value.trim().toUpperCase();
   if (!code) {
     alert("Enter a room code first.");
     return;
   }
+
+  const ok = await connectToRoom(code, "guest");
+  if (!ok) return;
 
   currentRoomCode = code;
   goToFighterSelect();
@@ -1540,7 +1549,8 @@ readyUpBtn.addEventListener("click", async () => {
         type: "broadcast",
         event: "player_ready",
         payload: {
-          side: multiplayerSide
+          side: multiplayerSide,
+          fighterId: selectedFighter.id
         }
       });
     }
@@ -1549,15 +1559,20 @@ readyUpBtn.addEventListener("click", async () => {
       localReady &&
       remoteReady &&
       multiplayerSide === "host" &&
-      roomChannel
+      roomChannel &&
+      selectedFighter &&
+      remoteSelectedFighterId
     ) {
       await roomChannel.send({
         type: "broadcast",
         event: "start_match",
         payload: {
-          roomCode: currentRoomCode
+          hostFighterId: selectedFighter.id,
+          guestFighterId: remoteSelectedFighterId
         }
       });
+
+      await startMultiplayerMatch(remoteSelectedFighterId);
     }
 
     return;
@@ -1643,9 +1658,6 @@ async function goFromSplash() {
 splashScreen.addEventListener("click", goFromSplash);
 splashScreen.addEventListener("touchstart", goFromSplash, { passive: true });
 
-splashScreen.addEventListener("click", goFromSplash);
-splashScreen.addEventListener("touchstart", goFromSplash, { passive: true });
-
 loadSaveData();
 updateCurrencyUI();
 renderFightersScreen();
@@ -1714,14 +1726,17 @@ function usernameToEmail(username) {
   return `${safe}@kombokombat.invalid`;
 }
 
-async function startMultiplayerMatch() {
+async function startMultiplayerMatch(enemyFighterId = null) {
   if (multiplayerMatchStarting) return;
-  if (!selectedFighter || !remoteSelectedFighterId) return;
+  if (!selectedFighter) return;
+
+  const finalEnemyId = enemyFighterId || remoteSelectedFighterId;
+  if (!finalEnemyId) return;
 
   multiplayerMatchStarting = true;
   readyUpBtn.textContent = "Ready Up";
 
-  const enemy = getFighterById(remoteSelectedFighterId);
+  const enemy = getFighterById(finalEnemyId);
   if (!enemy) {
     multiplayerMatchStarting = false;
     return;
@@ -1767,32 +1782,49 @@ async function connectToRoom(roomCode, side) {
         renderRemoteSelectedPreview();
       }
     })
-    .on("broadcast", { event: "start_match" }, async ({ payload }) => {
-  if (!selectedFighter || !remoteSelectedFighterId) return;
-  if (multiplayerMatchStarting) return;
-
-  await startMultiplayerMatch();
-})
     .on("broadcast", { event: "player_ready" }, async ({ payload }) => {
-  if (payload.side !== multiplayerSide) {
-    remoteReady = true;
+      if (payload.side !== multiplayerSide) {
+        remoteReady = true;
 
-    if (
-      localReady &&
-      remoteReady &&
-      multiplayerSide === "host" &&
-      roomChannel
-    ) {
-      await roomChannel.send({
-        type: "broadcast",
-        event: "start_match",
-        payload: {
-          roomCode: currentRoomCode
+        if (payload.fighterId) {
+          remoteSelectedFighterId = payload.fighterId;
+          renderRemoteSelectedPreview();
         }
-      });
-    }
-  }
-})
+      }
+
+      if (
+        multiplayerSide === "host" &&
+        localReady &&
+        remoteReady &&
+        selectedFighter &&
+        remoteSelectedFighterId &&
+        roomChannel
+      ) {
+        await roomChannel.send({
+          type: "broadcast",
+          event: "start_match",
+          payload: {
+            hostFighterId: selectedFighter.id,
+            guestFighterId: remoteSelectedFighterId
+          }
+        });
+
+        await startMultiplayerMatch(remoteSelectedFighterId);
+      }
+    })
+    .on("broadcast", { event: "start_match" }, async ({ payload }) => {
+      if (multiplayerMatchStarting) return;
+      if (!selectedFighter) return;
+
+      if (multiplayerSide === "host") {
+        remoteSelectedFighterId = payload.guestFighterId;
+      } else {
+        remoteSelectedFighterId = payload.hostFighterId;
+      }
+
+      renderRemoteSelectedPreview();
+      await startMultiplayerMatch(remoteSelectedFighterId);
+    })
     .on("presence", { event: "sync" }, () => {
       const state = roomChannel.presenceState();
       console.log("Presence sync:", state);
@@ -1872,4 +1904,16 @@ function handleRemotePlayerInput(input) {
   if (move) {
     triggerAiMove(move);
   }
+}
+
+async function requireLoggedInUser() {
+  const { data, error } = await supabaseClient.auth.getUser();
+
+  if (error || !data?.user) {
+    alert("You need to log in before playing multiplayer.");
+    showScreen(loginScreen);
+    return null;
+  }
+
+  return data.user;
 }
